@@ -52,7 +52,7 @@ class MPCController(BaseController):
             vel = state[10:13]
             attitude = state[7:10]
             omega = state[13:16]
-            x = np.hstack([pos, eul, vel, omega])
+            x = np.hstack([pos, attitude, vel, omega])
 
             x_ref = np.hstack([target[0:3],                     # target position
                                np.array([0, 0, target[3]]),     # keep roll=pitch=0, set target yaw
