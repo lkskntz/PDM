@@ -1,4 +1,4 @@
-mport numpy as np
+import numpy as np
 from gym_pybullet_drones.control.BaseController import BaseController
 
 class MPCController(BaseController):
