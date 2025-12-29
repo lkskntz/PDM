@@ -1,12 +1,29 @@
 from gym_pybullet_drones.envs.HoverAviary import HoverAviary
+from gym_pybullet_drones.utils.enums import DroneModel
 import obstacles as o
 
 class ObstacleHoverEnv(HoverAviary):
     
-    def __init__(self, phase=1, **kwargs):
+    def __init__(
+        self,
+        phase=1,
+        drone_model: DroneModel = DroneModel.CF2X,
+        gui=True,
+        record=False,
+        pyb_freq=240,
+        ctrl_freq=48,
+        **kwargs
+    ):
         assert phase in [1, 2, 3], "phase must be 1, 2, or 3"
         self.phase = phase
-        super().__init__(**kwargs)
+        super().__init__(
+            drone_model=drone_model,
+            gui=gui,
+            record=record,
+            pyb_freq=pyb_freq,
+            ctrl_freq=ctrl_freq,
+            **kwargs
+        )
 
     def _addObstacles(self): # Called automatically after resetSimulation()
         '''
