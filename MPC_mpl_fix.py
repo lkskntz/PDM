@@ -7,14 +7,14 @@ import random
 # =============================
 # CONFIG
 # =============================
-use_rrt = True  # True = gebruik RRT, False = direct goal
+use_rrt = False  # True = use RRT path, False = direct goal
 dt = 0.2
 N = 15
 nx = 6
 nu = 3
 v_max = 3.0
 a_max = 2.0
-safety_dist = 0.6  # afstand tot obstakels voor soft constraint
+safety_dist = 0.6  # distance to obstacle (soft constraint)
 
 # =============================
 # ENVIRONMENT

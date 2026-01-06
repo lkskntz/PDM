@@ -7,14 +7,14 @@ import random
 # =============================
 # CONFIG
 # =============================
-use_rrt = False       # True = gebruik RRT, False = MPC volgt direct bewegend doel
+use_rrt = False       # ALWAYS FALSE, True = use RRT path, False = direct goal 
 dt = 0.2
 N = 25
-nx = 6
-nu = 3
-v_max = 1.5
-a_max = 1.0
-safety_dist = 0.3    # afstand tot obstakels voor soft constraint
+nx = 6 # [x, y, z, vx, vy, vz]
+nu = 3 #[ax, ay, az]
+v_max = 3 #1.5 
+a_max = 2 #1.0
+safety_dist = 0.3   # distance to obstacle (soft constraint)
 
 # =============================
 # ENVIRONMENT
@@ -198,9 +198,8 @@ def draw_box(ax, box, color='gray', alpha=0.4):
 # MOVING GOAL
 # =============================
 def moving_goal(t):
-    # sinusvormige beweging in xy, z constant
-    x = 8.5 + 1.5*np.sin(0.05*t)
-    y = 9.5 + 1.5*np.cos(0.05*t)
+    x = 8.5 + 1.5*np.sin(0.25*t)
+    y = 9.5 + 1.5*np.cos(0.2*t)
     z = 2.2
     return np.array([x, y, z])
 
@@ -239,7 +238,7 @@ for step in range(160):
     # update target
     goal_now = moving_goal(step)
     dist_g = np.linalg.norm(x_state[:3] - goal_now)
-    print(dist_g)
+    print(dist_g) # prints the distance to the target, when it is smaller then 0.4 we consider the target to be 'hit'
     if np.linalg.norm(x_state[:3] - goal_now) < 0.4:
         print("Goal reached!")
         break
