@@ -1,92 +1,92 @@
-"""
-Run gym-pybullet-drones with a custom MPC controller following a circular trajectory
-"""
+import sys
+import os
+# Add the parent directory to the search path to find local gym_pybullet_drones modules
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import time
 import numpy as np
-
-from gym_pybullet_drones.envs.CtrlAviary import CtrlAviary
+from gym_pybullet_drones.utils.utils import sync
 from gym_pybullet_drones.utils.enums import DroneModel, Physics
 
-from gym_pybullet_drones.control.MPCControl import MPCControl
+# Import custom env and new controller
+from gym_pybullet_drones.custom_env import ObstacleHoverEnv
+from MPCControl import MPCControl
 
+def test_mpc():
+    # --- Config ---
+    drone_model = DroneModel.CF2X
+    
+    # --- Environment ---
+    # Instantiate your custom environment
+    env = ObstacleHoverEnv(drone_model=drone_model, gui=True)
+    
+    # !!! CRITICAL !!!
+    # ObstacleHoverEnv is an RL env that normally expects normalized actions [-1, 1].
+    # We are sending raw RPMs from MPC. We must override the preprocessing to allow this.
+    env._preprocessAction = lambda x: x 
+    
+    # --- Controller ---
+    ctrl_freq = 50
+    ctrl_dt = 1/ctrl_freq
+    mpc = MPCControl(drone_model=drone_model, dt=ctrl_dt, horizon=15)
 
-def main():
+    # --- Target Handling (The Fix) ---
+    # We ensure target_point is shape (3,)
+    if hasattr(env, 'TARGET_POS') and env.TARGET_POS is not None:
+        if env.TARGET_POS.ndim == 1:
+            target_point = env.TARGET_POS  # It is already [x, y, z]
+        else:
+            target_point = env.TARGET_POS[0] # It is [[x, y, z], ...]
+    else:
+        target_point = np.array([0.0, 0.0, 1.0])
 
-    #### Environment parameters ##############################################
-    DRONE_MODEL = DroneModel.CF2X
-    NUM_DRONES = 1
-    PHYSICS = Physics.PYB
-    SIM_FREQ = 240        # Hz (physics)
-    CTRL_FREQ = 48        # Hz (controller)
-    ctrl_dt = 1.0 / CTRL_FREQ
-    GUI = True
-    DURATION_SEC = 20
+    # Safety check
+    if np.isscalar(target_point) or len(target_point) != 3:
+        print(f"[WARNING] Invalid target shape: {target_point}. Defaulting to [0,0,1]")
+        target_point = np.array([0.0, 0.0, 1.0])
 
-    #### Create environment ##################################################
-    init_pos = np.array([[0.0, 0.0, 1.0]])  # starting at (0,0,1)
-    env = CtrlAviary(
-        drone_model=DRONE_MODEL,
-        num_drones=NUM_DRONES,
-        physics=PHYSICS,
-        gui=GUI,
-        initial_xyzs=init_pos
-    )
+    print(f"[INFO] MPC Target Point: {target_point}")
 
-    #### Create MPC controller ###############################################
-    mpc = MPCControl(
-        drone_model=DRONE_MODEL
-    )
-    print("\nL:", getattr(mpc, "L", None))
-    print("KF:", getattr(mpc, "KF", None))
-    print("KM:", getattr(mpc, "KM", None))
+    # --- Simulation Loop ---
+    start = time.time()
+    
+    # BaseAviary usually exposes .PYB_FREQ (default 240Hz)
+    pyb_freq = getattr(env, 'PYB_FREQ', 240) 
+    steps = int(10 * pyb_freq) # Run for 10 seconds
+    ctrl_step_ratio = int(pyb_freq / ctrl_freq)
 
-    #### Reset environment ###################################################
-    obs = env.reset()
+    obs, info = env.reset()
+    
+    # Initialize action dictionary
+    action = {'0': np.array([0, 0, 0, 0])}
 
-    # --- Trajectory parameters ---
-    print("[INFO] Starting MPC control loop")
+    for i in range(steps):
+        
+        # 1. Compute Control at specific frequency
+        if i % ctrl_step_ratio == 0:
+            
+            # Access exact state from the environment directly for the MPC
+            p_curr = env.pos[0]
+            q_curr = env.quat[0]
+            v_curr = env.vel[0]
+            w_curr = env.ang_v[0]
 
-    target_pos = np.array([2.0,0.0,1.0])
+            rpm, _, _ = mpc.computeControl(cur_pos=p_curr,
+                                           cur_quat=q_curr,
+                                           cur_vel=v_curr,
+                                           cur_ang_vel=w_curr,
+                                           target_pos=target_point)
+            
+            action['0'] = rpm
 
-    # Compute motor RPMs using MPC
-    #rpm = mpc.computeControl(
-     #   state=obs[0],
-      #  target_pos=target_pos
-    #)
+        # 2. Step the simulation
+        # Using raw RPMs because we patched _preprocessAction
+        ret = env.step(action)
+        
+        # 3. Sync visualization
+        sync(i, start, 1/pyb_freq)
 
-    # Step simulation
-    #obs, reward, terminated, truncated, info = env.step(rpm)
-    t = 0
-    while t < DURATION_SEC:
-        # Compute control
-        rpm = mpc.computeControl(state=obs[0], target_pos=target_pos)
-
-        # Step simulation
-        obs, reward, terminated, truncated, info = env.step(rpm)
-
-        # Slow down if GUI
-        if GUI:
-            time.sleep(ctrl_dt)
-
-        # Check early termination
-        if terminated or truncated:
-            print("[INFO] Episode ended early, resetting")
-            obs = env.reset()
-
-        t += ctrl_dt
-    # Slow down to real time if GUI is enabled
-    if GUI:
-        time.sleep(ctrl_dt)
-
-    if terminated or truncated:
-        print("[INFO] Episode ended early, resetting")
-        obs = env.reset()
-
-    #### Close environment ###################################################
     env.close()
-    print("[INFO] Simulation finished")
-
 
 if __name__ == "__main__":
-    main()
+    test_mpc()

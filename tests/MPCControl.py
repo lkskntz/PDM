@@ -1,228 +1,183 @@
 import numpy as np
-import casadi as ca
+import cvxpy as cp
+from scipy.spatial.transform import Rotation
 from gym_pybullet_drones.control.BaseControl import BaseControl
-from acados_template import AcadosOcp, AcadosOcpSolver, AcadosModel
+from gym_pybullet_drones.utils.enums import DroneModel
 
 class MPCControl(BaseControl):
-    def __init__(self, drone_model, g=9.81, m=0.03, horizon=50, dt=0.02):
-        super().__init__(drone_model=drone_model)
-        self.g = g
-        self.m = m
-        self.horizon = horizon
-        self.dt = dt
+    """
+    Linear Model Predictive Control (MPC) Class using CVXPY.
+    Linearized around hover state.
+    """
 
+    def __init__(self, 
+                 drone_model: DroneModel, 
+                 g: float = 9.8,
+                 horizon: int = 10,
+                 dt: float = 0.05):
+        """
+        Initialization.
+        """
+        super().__init__(drone_model=drone_model, g=g)
+        self.H = horizon
+        self.dt = dt
+        
+        # --- ROBUST PARAMETER INITIALIZATION ---
+        # BaseControl in some versions does not set self.M or self.J.
+        # We manually set them for the standard Crazyflie 2.x model if missing.
+        
+        # Mass
+        if not hasattr(self, 'M'):
+            self.M = 0.027
+            
+        # Inertia (diagonal params)
+        if not hasattr(self, 'J'):
+            self.J = np.diag([1.4e-5, 1.4e-5, 2.17e-5])
+            
+        # Arm length (center to motor)
+        if not hasattr(self, 'L'):
+            self.L = 0.0397
+
+        # Thrust coefficient
+        if not hasattr(self, 'KF'):
+            self.KF = 3.16e-10
+            
+        # Torque coefficient
+        if not hasattr(self, 'KM'):
+            self.KM = 7.94e-12
+
+        # --- Dynamics Model (Linearized around Hover) ---
+        # State: x = [px, py, pz, phi, theta, psi, vx, vy, vz, p, q, r] (12x1)
+        # Input: u = [Thrust, Tau_x, Tau_y, Tau_z] (4x1)
+        
+        m = self.M
+        Ixx = self.J[0,0]
+        Iyy = self.J[1,1]
+        Izz = self.J[2,2]
+
+        # Continuous A matrix (approximate)
+        A_c = np.zeros((12, 12))
+        
+        # Position derivative -> Velocity
+        A_c[0:3, 6:9] = np.eye(3)
+        
+        # Velocity derivative -> Angles (g linearization)
+        A_c[6, 4] = g       # x_acc approx g * theta
+        A_c[7, 3] = -g      # y_acc approx -g * phi
+        
+        # Angle derivative -> Angular rates
+        A_c[3:6, 9:12] = np.eye(3)
+        
+        # Continuous B matrix
+        B_c = np.zeros((12, 4))
+        B_c[8, 0] = 1/m         # z_acc driven by Thrust (u1)
+        B_c[9, 1] = 1/Ixx       # p_dot driven by Torque X
+        B_c[10, 2] = 1/Iyy      # q_dot driven by Torque Y
+        B_c[11, 3] = 1/Izz      # r_dot driven by Torque Z
+
+        # Discretize (Euler first order)
+        self.A = np.eye(12) + A_c * self.dt
+        self.B = B_c * self.dt
+
+        # --- MPC Problem Setup (CVXPY) ---
         self.nx = 12
         self.nu = 4
+        
+        # Variables
+        self.x_var = cp.Variable((self.nx, self.H + 1))
+        self.u_var = cp.Variable((self.nu, self.H))
+        
+        # Parameters (to be updated every step)
+        self.x_init = cp.Parameter(self.nx)
+        self.x_ref = cp.Parameter(self.nx)
+        
+        # Weights (Tune these to change aggressive/smooth behavior)
+        Q_diag = np.array([500, 500, 500,   # Position (x,y,z)
+                           10, 10, 10,      # Attitude (r,p,y)
+                           10, 10, 10,      # Velocity
+                           1, 1, 1])        # Rates
+        R_diag = np.array([0.1, 0.1, 0.1, 0.1]) # Input effort
+        
+        cost = 0
+        constraints = []
+        
+        constraints.append(self.x_var[:, 0] == self.x_init)
+        
+        u_hover = np.array([m * g, 0, 0, 0]) # Nominal input
+        
+        for t in range(self.H):
+            # Cost
+            cost += cp.quad_form(self.x_var[:, t] - self.x_ref, np.diag(Q_diag))
+            cost += cp.quad_form(self.u_var[:, t] - u_hover, np.diag(R_diag))
+            
+            # Dynamics
+            constraints.append(self.x_var[:, t+1] == self.A @ self.x_var[:, t] + self.B @ self.u_var[:, t])
+            
+            # Input Constraints (Thrust >= 0, approx max thrust)
+            constraints.append(self.u_var[0, t] <= 4 * m * g * 2.0) 
+            constraints.append(self.u_var[0, t] >= 0)
 
-        # Adjusted weights: allow tilting for horizontal motion
-        self.Q = np.diag([30, 30, 45,
-                          10.0, 10.0, 5.0,
-                          8.0, 8.0, 12.0,
-                          .80, .80, 10.0])
-        self.R = np.diag([0.2, 1.0, 1.0, 0.5])  # increased torque weights
+        # Terminal Cost
+        cost += cp.quad_form(self.x_var[:, self.H] - self.x_ref, np.diag(Q_diag))
 
-        self.ocp_solver = self.build_acados_nmpc()
+        self.prob = cp.Problem(cp.Minimize(cost), constraints)
 
-    def computeRPM(self, thrust, torques):
-        k_f = self.KF
-        k_m = self.KM
-        M = np.array([
-            [k_f, k_f, k_f, k_f],
-            [0, k_f, 0, -k_f],
-            [-k_f, 0, k_f, 0],
-            [k_m, -k_m, k_m, -k_m]
-        ])
-        w2 = np.linalg.pinv(M) @ np.hstack([thrust, torques])
-        rpm = np.sqrt(np.maximum(w2, 0)) * 60 / (2 * np.pi)
-        return rpm
-
-    def quad_dynamics_casadi(self, x, u):
-        px, py, pz = x[0], x[1], x[2]
-        phi, theta, psi = x[3], x[4], x[5]
-        vx, vy, vz = x[6], x[7], x[8]
-        wx, wy, wz = x[9], x[10], x[11]
-        T, tx, ty, tz = u[0], u[1], u[2], u[3]
-
-        Ixx, Iyy, Izz = 1.4e-5, 1.4e-5, 2.17e-5
-        J = ca.diag(ca.DM([Ixx, Iyy, Izz]))
-        Jinv = ca.inv(J)
-
-        cphi, sphi = ca.cos(phi), ca.sin(phi)
-        cth, sth = ca.cos(theta), ca.sin(theta)
-        cpsi, spsi = ca.cos(psi), ca.sin(psi)
-        R_bw = ca.vertcat(
-            ca.horzcat(cpsi*cth, cpsi*sth*sphi - spsi*cphi, cpsi*sth*cphi + spsi*sphi),
-            ca.horzcat(spsi*cth, spsi*sth*sphi + cpsi*cphi, spsi*sth*cphi - cpsi*sphi),
-            ca.horzcat(-sth, cth*sphi, cth*cphi)
-        )
-
-        p_dot = ca.vertcat(vx, vy, vz)
-        E = ca.vertcat(
-            ca.horzcat(1, sphi*ca.tan(theta), cphi*ca.tan(theta)),
-            ca.horzcat(0, cphi, -sphi),
-            ca.horzcat(0, sphi/cth, cphi/cth)
-        )
-        att_dot = E @ ca.vertcat(wx, wy, wz)
-
-        v_dot = (R_bw @ ca.vertcat(0, 0, T)) / self.m - ca.vertcat(0, 0, self.g)
-        D = ca.diag(ca.DM([3e-4, 3e-4, 5e-4]))  # damping
-        omega = ca.vertcat(wx, wy, wz)
-
-        omega_dot = Jinv @ (
-            ca.vertcat(tx, ty, tz)
-            - ca.cross(omega, J @ omega)
-            - D @ omega)
-
-        return ca.vertcat(p_dot, att_dot, v_dot, omega_dot)
-
-    def build_acados_nmpc(self):
-        ocp = AcadosOcp()
-        x = ca.MX.sym("x", self.nx)
-        u = ca.MX.sym("u", self.nu)
-        f_expl = ca.Function("f_expl", [x, u], [self.quad_dynamics_casadi(x, u)])
-
-        # ---------------- Model ----------------
-        ocp.model = AcadosModel()
-        ocp.model.name = 'quadrotor'
-        ocp.model.x = x
-        ocp.model.u = u
-        ocp.model.f_expl_expr = f_expl(x, u)
-        ocp.model.p = []
-
-        # ---------------- Horizon ----------------
-        ocp.dims.N = self.horizon
-
-        # ---------------- Cost setup ----------------
-
-        nx, nu = self.nx, self.nu
-        ny = nx + nu
-
-        # nonlinear cost expressions
-        ocp.model.cost_y_expr = ca.vertcat(x, u)
-        ocp.model.cost_y_expr_e = x
-
-        ocp.cost.cost_type = "NONLINEAR_LS"
-        ocp.cost.cost_type_e = "NONLINEAR_LS"
-
-        ocp.cost.W = np.block([
-            [self.Q, np.zeros((nx, nu))],
-            [np.zeros((nu, nx)), self.R]
-        ])
-        ocp.cost.W_e = self.Q
-
-        ocp.cost.yref = np.zeros(ny)
-        ocp.cost.yref_e = np.zeros(nx)
-
-
-        # ---------------- Input constraints ----------------
-        T_hover = self.m * self.g
-        ocp.constraints.lbu = [0.1*T_hover, -0.1, -0.1, -0.05]
-        ocp.constraints.ubu = [1.5*T_hover, 0.1, 0.1, 0.05]
-        ocp.constraints.idxbu = np.array([0,1,2,3])
-
-        # ---------------- Initial state constraints ----------------
-        # Placeholders; actual state will be set in computeControl()
-        ocp.constraints.idxbx_0 = np.arange(self.nx)
-        ocp.constraints.lbx_0 = np.zeros(self.nx)
-        ocp.constraints.ubx_0 = np.zeros(self.nx)
-
-        max_tilt = 0.5  # rad ≈ 28°
-        ocp.constraints.lbx = np.array([-max_tilt, -max_tilt])
-        ocp.constraints.ubx = np.array([ max_tilt,  max_tilt])
-        ocp.constraints.idxbx = np.array([3, 4])
-
-        # ---------------- Solver options ----------------
-        ocp.solver_options.qp_solver = "PARTIAL_CONDENSING_HPIPM"
-        ocp.solver_options.integrator_type = "ERK"
-        ocp.solver_options.tf = self.horizon * self.dt
-
-        # ---------------- Create solver ----------------
-        solver = AcadosOcpSolver(ocp, json_file="acados_ocp.json")
-        return solver
-
-    def computeControl(
-        self,
-        state,
-        target_pos,
-        target_rpy=np.zeros(3),
-        target_vel=np.zeros(3),
-        target_rpy_rates=np.zeros(3),
-    ):
-        state = np.asarray(state).flatten()
-        assert state.size >= 12
-
-        pos = state[0:3]
-        rpy = state[3:6]
-        vel = state[6:9]
-        omega = state[9:12]
-
-        x0 = np.hstack([pos, rpy, vel, omega])
-
-        x_ref = np.hstack([
-            target_pos,
-            target_rpy,
-            target_vel,
-            target_rpy_rates
-        ])
-
-        u_hover = np.array([self.m * self.g, 0.0, 0.0, 0.0])
-        yref_stage = np.hstack([x_ref, u_hover])
-
-        # --------------------------------------------------
-        # Initial state constraint
-        # --------------------------------------------------
-        self.ocp_solver.set(0, "lbx", x0)
-        self.ocp_solver.set(0, "ubx", x0)
-
-        # --------------------------------------------------
-        # Warm start (shift previous solution)
-        # --------------------------------------------------
-        if not hasattr(self, "x_traj"):
-            # First call: initialize guesses
-            self.x_traj = [x0.copy() for _ in range(self.horizon + 1)]
-            self.u_traj = [u_hover.copy() for _ in range(self.horizon)]
+    def computeControl(self,
+                       cur_pos,
+                       cur_quat,
+                       cur_vel,
+                       cur_ang_vel,
+                       target_pos,
+                       target_vel=np.zeros(3),
+                       target_rpy=np.zeros(3),
+                       target_rpy_rates=np.zeros(3)):
+        """
+        Computes the control action using the MPC solver.
+        """
+        # 1. State Estimation / Prep
+        rpy = Rotation.from_quat(cur_quat).as_euler('xyz', degrees=False)
+        
+        # Current state vector x = [pos, rpy, vel, ang_vel]
+        x_curr = np.hstack([cur_pos, rpy, cur_vel, cur_ang_vel])
+        
+        # Reference state vector
+        x_target = np.hstack([target_pos, target_rpy, target_vel, target_rpy_rates])
+        
+        # 2. Update CVXPY Parameters
+        self.x_init.value = x_curr
+        self.x_ref.value = x_target
+        
+        # 3. Solve
+        try:
+            self.prob.solve(solver=cp.OSQP, warm_start=True)
+            if self.prob.status not in [cp.OPTIMAL, cp.OPTIMAL_INACCURATE]:
+                 print(f"MPC Warning: Solver status: {self.prob.status}")
+        except Exception as e:
+            print(f"MPC Error: {e}")
+            
+        # 4. Extract Control Inputs
+        if self.u_var.value is None:
+            # Fallback to hover if solver fails
+            u_opt = np.array([self.GRAVITY * self.M, 0, 0, 0])
         else:
-            # Shift trajectories
-            self.x_traj[:-1] = self.x_traj[1:]
-            self.x_traj[-1] = self.x_traj[-2].copy()
+            u_opt = self.u_var[:, 0].value
 
-            self.u_traj[:-1] = self.u_traj[1:]
-            self.u_traj[-1] = self.u_traj[-2].copy()
+        thrust = u_opt[0]
+        torques = u_opt[1:]
+        
+        # 5. Mixer (Standard X Configuration for CF2X)
+        t = thrust / 4.0
+        r = torques[0] / (4.0 * self.L * self.KF)
+        p = torques[1] / (4.0 * self.L * self.KF)
+        y = torques[2] / (4.0 * self.KM)
 
-        # --------------------------------------------------
-        # Set warm-start guesses and references
-        # --------------------------------------------------
-        for k in range(self.horizon):
-            self.ocp_solver.set(k, "x", self.x_traj[k])
-            self.ocp_solver.set(k, "u", self.u_traj[k])
-            self.ocp_solver.set(k, "yref", yref_stage)
-
-        # Terminal reference (state only)
-        self.ocp_solver.set(self.horizon, "yref", x_ref)
-
-        # --------------------------------------------------
-        # Solve NMPC
-        # --------------------------------------------------
-        status = self.ocp_solver.solve()
-
-        if status != 0:
-            # Solver failed → safe fallback
-            thrust = self.m * self.g
-            torques = np.zeros(3)
-            rpm = self.computeRPM(thrust, torques)
-            return rpm.reshape((1, 4))
-
-        # --------------------------------------------------
-        # Extract optimal control and trajectory
-        # --------------------------------------------------
-        u_opt = self.ocp_solver.get(0, "u")
-        thrust, torques = u_opt[0], u_opt[1:]
-
-        # Save full solution for next warm-start
-        for k in range(self.horizon):
-            self.x_traj[k] = self.ocp_solver.get(k, "x")
-            self.u_traj[k] = self.ocp_solver.get(k, "u")
-        self.x_traj[self.horizon] = self.ocp_solver.get(self.horizon, "x")
-
-        rpm = self.computeRPM(thrust, torques)
-        return rpm.reshape((1, 4))
+        w0_sq = t - r - p - y
+        w1_sq = t - r + p + y
+        w2_sq = t + r + p - y
+        w3_sq = t + r - p + y
+        
+        w_sq = np.array([w0_sq, w1_sq, w2_sq, w3_sq])
+        w_sq = np.maximum(w_sq, 0)
+        rpm = np.sqrt(w_sq / self.KF)
+        
+        return rpm, cur_pos, rpy

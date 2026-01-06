@@ -1,6 +1,6 @@
 from gym_pybullet_drones.envs.HoverAviary import HoverAviary
 from gym_pybullet_drones.utils.enums import DroneModel
-import obstacles as o
+import gym_pybullet_drones.obstacles as o
 
 class ObstacleHoverEnv(HoverAviary):
     
