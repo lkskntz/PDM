@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 import random
 from matplotlib.animation import FFMpegWriter
+import time
 
 # =============================
 # CONFIG
@@ -17,7 +18,14 @@ v_max = 3 #1.5
 a_max = 2 #1.0
 safety_dist = 0.3   # distance to obstacle (soft constraint)
 
+goal_tolerance = 0.25 # [m] distance to goal to consider it reached
+hold_time = 2.0 # [s] keep simulation running for few seconds after goal reached
+max_steps = 160 # safety cap in case goal is not reached
+
 record_video = True
+slowed_down = True
+slowdown_rate = 1.0 # Recording/simulation is slowed down x.x times (visual only)
+fps = int(1/dt)
 
 # =============================
 # ENVIRONMENT
@@ -237,7 +245,6 @@ def draw():
     plt.pause(0.05)
 
 # ===== VIDEO RECORDING =====
-fps = 20
 if use_rrt:
     writer = FFMpegWriter(
         fps=fps,
@@ -254,17 +261,27 @@ else:
     video_filename = "mpc_movingtarget_simulation.mp4"
 
 # ======== SIMULATION ========
+goal_reached = False
+goal_reached_step = None
+goal_reached_time = None
+
+step = 0
+max_hold_steps = int(hold_time / dt)
+
 if record_video:
     with writer.saving(fig, video_filename, dpi=150):
-        for step in range(160):
+        while step < max_steps:
             # update target
             goal_now = moving_goal(step)
             dist_g = np.linalg.norm(x_state[:3] - goal_now)
-            print(dist_g) # prints the distance to the target, when it is smaller then 0.4 we consider the target to be 'hit'
-            if np.linalg.norm(x_state[:3] - goal_now) < 0.4:
-                print("Goal reached!")
-                break
-
+            print(np.round(dist_g, 4)) # prints the distance to the target, when it is smaller then 0.4 we consider the target to be 'hit'
+            
+            if not goal_reached and dist_g < goal_tolerance:
+                goal_reached = True
+                goal_reached_step = step
+                goal_reached_time = goal_reached_step * dt
+                print(f"Goal reached at step {goal_reached_step}!")
+                print(f"Goal was reached in {goal_reached_time} seconds")
 
             if use_rrt:
                 if waypoint_idx < len(rrt_path) - 1:
@@ -292,19 +309,36 @@ if record_video:
                 x_state[5] + dt*u0[2]
             ])
             trajectory.append(x_state[:3])
+
+            if not goal_reached and step==max_steps-1:
+                print("Goal not reached")
+        
+            if goal_reached_step is not None and step - goal_reached_step >= max_hold_steps:
+                print("Hold time over, simulation is stopped")
+                draw()
+                writer.grab_frame()
+                plt.ioff()
+                plt.close(fig)
+                break
+
             draw()
             writer.grab_frame()
+            if slowed_down:
+                time.sleep(dt * slowdown_rate)
+            step += 1
 
 else:
-    for step in range(160):
+    while step < max_steps:
         # update target
         goal_now = moving_goal(step)
         dist_g = np.linalg.norm(x_state[:3] - goal_now)
-        print(dist_g) # prints the distance to the target, when it is smaller then 0.4 we consider the target to be 'hit'
-        if np.linalg.norm(x_state[:3] - goal_now) < 0.4:
-            print("Goal reached!")
-            break
-
+        print(np.round(dist_g, 4)) # prints the distance to the target, when it is smaller then 0.4 we consider the target to be 'hit'
+        if not goal_reached and dist_g < goal_tolerance:
+            goal_reached = True
+            goal_reached_step = step
+            goal_reached_time = goal_reached_step * dt
+            print(f"Goal reached at step {goal_reached_step}!")
+            print(f"Goal was reached in {goal_reached_time} seconds")
 
         if use_rrt:
             if waypoint_idx < len(rrt_path) - 1:
@@ -332,7 +366,22 @@ else:
             x_state[5] + dt*u0[2]
         ])
         trajectory.append(x_state[:3])
+
+        if not goal_reached and step==max_steps-1:
+            print("Goal not reached")
+    
+        if goal_reached_step is not None and step - goal_reached_step >= max_hold_steps:
+            print("Hold time over, simulation is stopped")
+            draw()
+            plt.ioff()
+            plt.close(fig)
+            break
+
         draw()
+        if slowed_down:
+            time.sleep(dt * slowdown_rate)
+        step += 1
+
 
 plt.ioff()
 plt.show()
