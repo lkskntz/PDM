@@ -5,11 +5,10 @@ Run gym-pybullet-drones with a custom MPC controller following a circular trajec
 import time
 import numpy as np
 
-from gym_pybullet_drones.envs.CtrlAviary import CtrlAviary
+from gym_pybullet_drones.envs.custom_env import ObstacleCtrlEnv
 from gym_pybullet_drones.utils.enums import DroneModel, Physics
-
-from gym_pybullet_drones.control.MPCControl import MPCControl
-
+#from gym_pybullet_drones.control.MPCControl import MPCControl as Control
+from gym_pybullet_drones.control.RRTMPC import RRTMPCController as Control
 
 def main():
 
@@ -24,18 +23,25 @@ def main():
     DURATION_SEC = 40
 
     #### Create environment ##################################################
-    init_pos = np.array([[0.0, 0.0, 0.0]])  # starting at (0,0,1)
-    env = CtrlAviary(
+    init_pos = np.array([[2.0, 0.0, 0.0]])  # starting at (0,0,1)
+    env = ObstacleCtrlEnv(phase=3,
         drone_model=DRONE_MODEL,
         num_drones=NUM_DRONES,
         physics=PHYSICS,
         gui=GUI,
-        initial_xyzs=init_pos
+        initial_xyzs=init_pos,
+        initial_rpys=np.zeros((1,3)),
     )
 
+    bounds = [(-7.5, 7.5),  # x
+              (-5.0, 5.0),  # y
+              (0.0, 5.0)]    # z
+
+
     #### Create MPC controller ###############################################
-    mpc = MPCControl(
-        drone_model=DRONE_MODEL
+    mpc = Control(
+        drone_model=DRONE_MODEL,
+        bounds=bounds
     )
     print("\nL:", getattr(mpc, "L", None))
     print("KF:", getattr(mpc, "KF", None))
@@ -47,7 +53,7 @@ def main():
     # --- Trajectory parameters ---
     print("[INFO] Starting MPC control loop")
 
-    target_pos = np.array([1.0,0.0,1.0])
+    target_pos = np.array([[4.0,0.0,3.0]])
 
     # Compute motor RPMs using MPC
     #rpm = mpc.computeControl(
