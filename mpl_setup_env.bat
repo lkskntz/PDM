@@ -19,8 +19,8 @@ echo Setup Complete!
 echo To activate the environment, use:
 echo conda activate %ENV_NAME%
 echo Then the following matplotlib simulations can be run:
-echo python ./Matplotlib/MPC_mpl_fix.py
-echo python ./Matplotlib/MPC_mpl_mvt.py
-echo python ./Matplotlib/MPC_mpl_crossbeams.py
+echo python Matplotlib\MPC_mpl_fix.py
+echo python Matplotlib\MPC_mpl_mvt.py
+echo python Matplotlib\MPC_mpl_crossbeams.py
 echo ------------------------------------------------
 pause
