@@ -3,11 +3,12 @@ import casadi as ca
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 import random
+from matplotlib.animation import FFMpegWriter
 
 # =============================
 # CONFIG
 # =============================
-use_rrt = False  # True = use RRT path, False = direct goal
+use_rrt = True  # True = use RRT path, False = direct goal
 dt = 0.2
 N = 15
 nx = 6
@@ -15,6 +16,8 @@ nu = 3
 v_max = 3.0
 a_max = 2.0
 safety_dist = 0.6  # distance to obstacle (soft constraint)
+
+record_video = True
 
 # =============================
 # ENVIRONMENT
@@ -226,31 +229,77 @@ def draw():
     ax.set_title("3D MPC with Soft Obstacles" + (" + RRT" if use_rrt else ""))
     plt.pause(0.05)
 
+# ===== VIDEO RECORDING =====
+fps = 20
+if use_rrt:
+    writer = FFMpegWriter(
+        fps=fps,
+        metadata=dict(title="3D MPC+RRT", artist="matplotlib"),
+        bitrate=1000
+    )
+    video_filename = "mpc_rrt_simulation.mp4"
+else:
+    writer = FFMpegWriter(
+        fps=fps,
+        metadata=dict(title="3D MPC", artist="matplotlib"),
+        bitrate=1000
+    )
+    video_filename = "mpc_simulation.mp4"
+
 # ======== SIMULATION ========
-for _ in range(1600):
+if record_video:
+    with writer.saving(fig, video_filename, dpi=150):
+        for _ in range(1600):
+            # Determine current waypoint
+            if waypoint_idx < len(rrt_path) - 1:
+                if np.linalg.norm(x_state[:3] - rrt_path[waypoint_idx]) < 0.3:
+                    waypoint_idx += 1
+
+            opti.set_value(X0, x_state)
+            opti.set_value(Xref, rrt_path[waypoint_idx])
+            opti.set_initial(X, np.tile(x_state.reshape(-1,1), (1, N+1)))
+            opti.set_initial(U, np.zeros((nu, N)))
+
+            sol = opti.solve()
+            u0 = sol.value(U[:,0])
+
+            x_state = np.array([
+                x_state[0] + dt*x_state[3],
+                x_state[1] + dt*x_state[4],
+                x_state[2] + dt*x_state[5],
+                x_state[3] + dt*u0[0],
+                x_state[4] + dt*u0[1],
+                x_state[5] + dt*u0[2]
+            ])
+            trajectory.append(x_state[:3])
+            draw()
+            writer.grab_frame()
+
+else:
+    for _ in range(1600):
     # Determine current waypoint
-    if waypoint_idx < len(rrt_path) - 1:
-        if np.linalg.norm(x_state[:3] - rrt_path[waypoint_idx]) < 0.3:
-            waypoint_idx += 1
+        if waypoint_idx < len(rrt_path) - 1:
+            if np.linalg.norm(x_state[:3] - rrt_path[waypoint_idx]) < 0.3:
+                waypoint_idx += 1
 
-    opti.set_value(X0, x_state)
-    opti.set_value(Xref, rrt_path[waypoint_idx])
-    opti.set_initial(X, np.tile(x_state.reshape(-1,1), (1, N+1)))
-    opti.set_initial(U, np.zeros((nu, N)))
+        opti.set_value(X0, x_state)
+        opti.set_value(Xref, rrt_path[waypoint_idx])
+        opti.set_initial(X, np.tile(x_state.reshape(-1,1), (1, N+1)))
+        opti.set_initial(U, np.zeros((nu, N)))
 
-    sol = opti.solve()
-    u0 = sol.value(U[:,0])
+        sol = opti.solve()
+        u0 = sol.value(U[:,0])
 
-    x_state = np.array([
-        x_state[0] + dt*x_state[3],
-        x_state[1] + dt*x_state[4],
-        x_state[2] + dt*x_state[5],
-        x_state[3] + dt*u0[0],
-        x_state[4] + dt*u0[1],
-        x_state[5] + dt*u0[2]
-    ])
-    trajectory.append(x_state[:3])
-    draw()
+        x_state = np.array([
+            x_state[0] + dt*x_state[3],
+            x_state[1] + dt*x_state[4],
+            x_state[2] + dt*x_state[5],
+            x_state[3] + dt*u0[0],
+            x_state[4] + dt*u0[1],
+            x_state[5] + dt*u0[2]
+        ])
+        trajectory.append(x_state[:3])
+        draw()
 
 plt.ioff()
 plt.show()

@@ -3,6 +3,7 @@ import casadi as ca
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 import random
+from matplotlib.animation import FFMpegWriter
 
 # =============================
 # CONFIG
@@ -15,6 +16,8 @@ nu = 3 #[ax, ay, az]
 v_max = 3 #1.5 
 a_max = 2 #1.0
 safety_dist = 0.3   # distance to obstacle (soft constraint)
+
+record_video = True
 
 # =============================
 # ENVIRONMENT
@@ -233,44 +236,103 @@ def draw():
     ax.set_title("3D MPC with Soft Obstacles" + (" + RRT" if use_rrt else ""))
     plt.pause(0.05)
 
+# ===== VIDEO RECORDING =====
+fps = 20
+if use_rrt:
+    writer = FFMpegWriter(
+        fps=fps,
+        metadata=dict(title="3D MPC+RRT+MovingTarget", artist="matplotlib"),
+        bitrate=1000
+    )
+    video_filename = "mpc_rrt_movingtarget_simulation.mp4"
+else:
+    writer = FFMpegWriter(
+        fps=fps,
+        metadata=dict(title="3D MPC+MovingTarget", artist="matplotlib"),
+        bitrate=1000
+    )
+    video_filename = "mpc_movingtarget_simulation.mp4"
+
 # ======== SIMULATION ========
-for step in range(160):
-    # update target
-    goal_now = moving_goal(step)
-    dist_g = np.linalg.norm(x_state[:3] - goal_now)
-    print(dist_g) # prints the distance to the target, when it is smaller then 0.4 we consider the target to be 'hit'
-    if np.linalg.norm(x_state[:3] - goal_now) < 0.4:
-        print("Goal reached!")
-        break
+if record_video:
+    with writer.saving(fig, video_filename, dpi=150):
+        for step in range(160):
+            # update target
+            goal_now = moving_goal(step)
+            dist_g = np.linalg.norm(x_state[:3] - goal_now)
+            print(dist_g) # prints the distance to the target, when it is smaller then 0.4 we consider the target to be 'hit'
+            if np.linalg.norm(x_state[:3] - goal_now) < 0.4:
+                print("Goal reached!")
+                break
 
 
-    if use_rrt:
-        if waypoint_idx < len(rrt_path) - 1:
-            if np.linalg.norm(x_state[:3] - rrt_path[waypoint_idx]) < 0.3:
-                waypoint_idx += 1
-        target = rrt_path[waypoint_idx]
-    else:
-        target = goal_now
+            if use_rrt:
+                if waypoint_idx < len(rrt_path) - 1:
+                    if np.linalg.norm(x_state[:3] - rrt_path[waypoint_idx]) < 0.3:
+                        waypoint_idx += 1
+                target = rrt_path[waypoint_idx]
+            else:
+                target = goal_now
 
-    # MPC solve
-    opti.set_value(X0, x_state)
-    opti.set_value(Xref, target)
-    opti.set_initial(X, np.tile(x_state.reshape(-1,1), (1, N+1)))
-    opti.set_initial(U, np.zeros((nu, N)))
-    sol = opti.solve()
-    u0 = sol.value(U[:,0])
+            # MPC solve
+            opti.set_value(X0, x_state)
+            opti.set_value(Xref, target)
+            opti.set_initial(X, np.tile(x_state.reshape(-1,1), (1, N+1)))
+            opti.set_initial(U, np.zeros((nu, N)))
+            sol = opti.solve()
+            u0 = sol.value(U[:,0])
 
-    # update state
-    x_state = np.array([
-        x_state[0] + dt*x_state[3],
-        x_state[1] + dt*x_state[4],
-        x_state[2] + dt*x_state[5],
-        x_state[3] + dt*u0[0],
-        x_state[4] + dt*u0[1],
-        x_state[5] + dt*u0[2]
-    ])
-    trajectory.append(x_state[:3])
-    draw()
+            # update state
+            x_state = np.array([
+                x_state[0] + dt*x_state[3],
+                x_state[1] + dt*x_state[4],
+                x_state[2] + dt*x_state[5],
+                x_state[3] + dt*u0[0],
+                x_state[4] + dt*u0[1],
+                x_state[5] + dt*u0[2]
+            ])
+            trajectory.append(x_state[:3])
+            draw()
+            writer.grab_frame()
+
+else:
+    for step in range(160):
+        # update target
+        goal_now = moving_goal(step)
+        dist_g = np.linalg.norm(x_state[:3] - goal_now)
+        print(dist_g) # prints the distance to the target, when it is smaller then 0.4 we consider the target to be 'hit'
+        if np.linalg.norm(x_state[:3] - goal_now) < 0.4:
+            print("Goal reached!")
+            break
+
+
+        if use_rrt:
+            if waypoint_idx < len(rrt_path) - 1:
+                if np.linalg.norm(x_state[:3] - rrt_path[waypoint_idx]) < 0.3:
+                    waypoint_idx += 1
+            target = rrt_path[waypoint_idx]
+        else:
+            target = goal_now
+
+        # MPC solve
+        opti.set_value(X0, x_state)
+        opti.set_value(Xref, target)
+        opti.set_initial(X, np.tile(x_state.reshape(-1,1), (1, N+1)))
+        opti.set_initial(U, np.zeros((nu, N)))
+        sol = opti.solve()
+        u0 = sol.value(U[:,0])
+
+        # update state
+        x_state = np.array([
+            x_state[0] + dt*x_state[3],
+            x_state[1] + dt*x_state[4],
+            x_state[2] + dt*x_state[5],
+            x_state[3] + dt*u0[0],
+            x_state[4] + dt*u0[1],
+            x_state[5] + dt*u0[2]
+        ])
+        trajectory.append(x_state[:3])
+        draw()
 
 plt.ioff()
 plt.show()
