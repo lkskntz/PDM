@@ -16,7 +16,7 @@ cd build
 cmake -DBUILD_SHARED_LIBS=ON ..
 make install -j4
 
-cd..
+cd ..
 #Correct Exported variable necessary to run the scripts. ACADOS_SOURCE_DIR and LD_LIBRARY_PATH both required.
 #export ACADOS_SOURCE_DIR = $(pwd)
 #export LD_LIBRARY_PATH=$ACADOS_SOURCE_DIR/lib
