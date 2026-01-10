@@ -40,9 +40,10 @@ fi
 # Install Acados python interface and gym_pybullet_drones
 echo "Installing acados_template python interface..."
 pip install -e acados/interfaces/acados_template
-pushd gym_pybullet_drones > /dev/null
-pip install -e .
-popd > /dev/null
+pip install -e gym_pybullet_drones/
+#pushd gym_pybullet_drones > /dev/null
+#pip install -e .
+#popd > /dev/null
 
 
 # Configuration environment
@@ -55,6 +56,4 @@ echo "------------------------------------------------"
 echo "Setup Complete!"
 echo "To activate the environment, use:"
 echo "conda activate $ENV_NAME"
-echo "After that, to run the simulation, use:"
-echo "python gym_pybullet_drones/control/RRTMPC.py"
 echo "------------------------------------------------"
