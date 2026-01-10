@@ -9,14 +9,15 @@ There are a number of files in this repository that have been created from scrat
 1. `./Matplotlib/MPC_mpl_fix.py`
 2. `./Matplotlib/MPC_mpl_mvt.py`
 3. `./Matplotlib/MPC_mpl_crossbeams.py`
-4. `./gym_pybullet_drones/control/RRTMPC.py`
-5. `./gym_pybullet_drones/envs/custom_env.py`
-6. `./gym_pybullet_drones/envs/obstacles.py`
-7. `./gym_pybullet_drones/mpc_constraint_helper.py`
+4. `./gym_pybullet_drones/gym_pybullet_drones/control/RRTMPC.py`
+5. `./gym_pybullet_drones/gym_pybullet_drones/examples/MPC_Test.py`
+6. `./gym_pybullet_drones/gym_pybullet_drones/envs/custom_env.py`
+7. `./gym_pybullet_drones/gym_pybullet_drones/envs/obstacles.py`
+8. `./gym_pybullet_drones/gym_pybullet_drones/mpc_constraint_helper.py`
 
 ## Matplotlib simulations
 
-To be able to run the MPC and RRT simulations of the matplotlib-version. It is assumed that Anaconda is available, as we will use a custom Anaconda environment to solve for all the dependencies.
+To be able to run the MPC and RRT simulations of the matplotlib-version, it is assumed that Anaconda is available, as we will use a custom Anaconda environment to solve for all the dependencies.
 
 ### Linux/MacOS
 
@@ -54,4 +55,25 @@ python ./Matplotlib/MPC_mpl_crossbeams.py
 ```batch
 conda deactivate
 conda remove -n mpc_drone_env --all
+```
+
+## Gym-Pybullet-Drones simulations
+
+To be able to run the Gym-Pybullet-Drones version of the RRT and MPC simulations, it is assumed that Anaconda is available, as we will use a custom Anaconda environment to solve for all the dependencies.
+
+### Linux/MacOS
+
+1. In the root directory of the project files, that is the same directory as this README, there is a setup shell-script. This script provides the setup of the Anaconda environment. Simply run: `bash ./pyb_setup_env.sh`
+2. After the environment setup has completed, you can activate the environment using: `conda activate mpc_pybullet`
+3. With the environment activated, the simulations can be run using:
+
+```bash
+python ./gym_pybullet_drones/gym_pybullet_drones/examples/MPC_Test.py
+```
+
+4. When you are done with any simulation and you wish to remove the environment, run the following two commands:
+
+```bash
+conda deactivate
+conda remove -n mpc_pybullet --all
 ```
