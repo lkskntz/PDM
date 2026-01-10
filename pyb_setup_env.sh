@@ -25,22 +25,23 @@ conda activate "$ENV_NAME"
 
 # Install Acados
 echo "Installing Acados..."
-if [ ! -d "acados" ]; then
-    git clone https://github.com/acados/acados.git
-    cd acados
-    git submodule update --recursive --init
-    mkdir -p build
-    cd build
-    cmake -DBUILD_SHARED_LIBS=ON -DACADOS_WITH_PYTHON=ON ..
-    make -j4
-    cd ../..
+if [ ! -d "$PROJECT_ROOT/acados" ]; then
+    git clone https://github.com/acados/acados.git "$PROJECT_ROOT/acados"
 fi
+cd "$PROJECT_ROOT/acados"
+git submodule update --recursive --init
+mkdir -p build
+cd build
+cmake -DBUILD_SHARED_LIBS=ON -DACADOS_WITH_PYTHON=ON ..
+make -j4
+make install
+cd $PROJECT_ROOT
 
 
 # Install Acados python interface and gym_pybullet_drones
 echo "Installing acados_template python interface..."
-pip install -e acados/interfaces/acados_template
-pip install -e gym_pybullet_drones/
+pip install -e "$PROJECT_ROOT/acados/interfaces/acados_template"
+pip install -e "$PROJECT_ROOT/gym_pybullet_drones"
 #pushd gym_pybullet_drones > /dev/null
 #pip install -e .
 #popd > /dev/null
