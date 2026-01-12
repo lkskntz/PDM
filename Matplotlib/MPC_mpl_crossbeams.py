@@ -9,8 +9,8 @@ import time
 # =============================
 # CONFIG
 # =============================
-use_rrt = True        # True = use RRT path, False = direct goal
-use_moving_goal = False   # True = sinus-like moving goal (turn rrt off), False = static goal
+use_rrt = False        # True = use RRT path, False = direct goal
+use_moving_goal = True   # True = sinus-like moving goal (turn rrt off), False = static goal
 
 rrt_step = 2 #smaller gives more detailed path, but more expensive (may need to increase max iter in rrt)
 dt = 0.2
@@ -21,7 +21,7 @@ v_max = 3.0
 a_max = 2.0
 safety_dist = 0.6       # distance to obstacle (soft constraint)
 
-goal_tolerance = 0.25 # [m] distance to goal to consider it reached
+goal_tolerance = 0.5 # [m] distance to goal to consider it reached
 hold_time = 2.0 # [s] keep simulation running for few seconds after goal reached
 max_steps = 3000 # safety cap in case goal is not reached
 
