@@ -50,7 +50,9 @@ python Matplotlib\mpl_scenario2.py
 python Matplotlib\mpl_scenario3.py
 ```
 
-4. When you are done with any simulation and you wish to remove the environment, run the following two commands:
+4. Within the python scripts, the simulation can be configured such as enabling or disabling RRT or the moving target. These configurations are done by switching booleans at the top of the scripts.
+
+5. When you are done with any simulation and you wish to remove the environment, run the following two commands:
 
 ```batch
 conda deactivate
@@ -71,7 +73,9 @@ To be able to run the Gym-Pybullet-Drones version of the RRT and MPC simulations
 python ./gym_pybullet_drones/gym_pybullet_drones/examples/Pybullet_Simulation.py
 ```
 
-4. When you are done with any simulation and you wish to remove the environment, run the following two commands:
+4. Within the python scripts, the simulation can be configured such as enabling or disabling RRT or the moving target. These configurations are done by switching booleans at the top of the scripts.
+
+5. When you are done with any simulation and you wish to remove the environment, run the following two commands:
 
 ```bash
 conda deactivate
