@@ -8,7 +8,7 @@ There are a number of files in this repository that have been created from scrat
 
 1. `./Matplotlib/mpl_scenario1.py`
 2. `./Matplotlib/mpl_scenario2.py`
-3. `./Matplotlib/mpl_scenario3.py`
+3. `./Matplotlib/mpl_scenario34.py`
 4. `./gym_pybullet_drones/gym_pybullet_drones/control/RRTMPC.py`
 5. `./gym_pybullet_drones/gym_pybullet_drones/examples/Pybullet_Simulation.py`
 6. `./gym_pybullet_drones/gym_pybullet_drones/envs/custom_env.py`
@@ -26,9 +26,9 @@ To be able to run the MPC and RRT simulations of the matplotlib-version, it is a
 3. With the environment activated, the simulations can be run using:
 
 ```bash
-python ./Matplotlib/MPC_mpl_fix.py
-python ./Matplotlib/MPC_mpl_mvt.py
-python ./Matplotlib/MPC_mpl_crossbeams.py
+python ./Matplotlib/mpl_scenario1.py
+python ./Matplotlib/mpl_scenario2.py
+python ./Matplotlib/mpl_scenario3.py
 ```
 
 4. When you are done with any simulation and you wish to remove the environment, run the following two commands:
@@ -45,9 +45,9 @@ conda remove -n mpc_drone_env --all
 3. With the environment activated, the simulations can be run using:
 
 ```batch
-python ./Matplotlib/MPC_mpl_fix.py
-python ./Matplotlib/MPC_mpl_mvt.py
-python ./Matplotlib/MPC_mpl_crossbeams.py
+python Matplotlib\mpl_scenario1.py
+python Matplotlib\mpl_scenario2.py
+python Matplotlib\mpl_scenario3.py
 ```
 
 4. When you are done with any simulation and you wish to remove the environment, run the following two commands:
@@ -68,7 +68,7 @@ To be able to run the Gym-Pybullet-Drones version of the RRT and MPC simulations
 3. With the environment activated, the simulations can be run using:
 
 ```bash
-python ./gym_pybullet_drones/gym_pybullet_drones/examples/MPC_Test.py
+python ./gym_pybullet_drones/gym_pybullet_drones/examples/Pybullet_Simulation.py
 ```
 
 4. When you are done with any simulation and you wish to remove the environment, run the following two commands:
