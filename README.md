@@ -7,8 +7,8 @@ Planning and Decision Making project
 There are a number of files in this repository that have been created from scratch for this project by us. To clarify what code is authentic from us, those files are listed below:
 
 1. `./Matplotlib/mpl_scenario1.py`
-2. `./Matplotlib/mpl_scenario2.py`
-3. `./Matplotlib/mpl_scenario34.py`
+2. `./Matplotlib/mpl_scenario3.py`
+3. `./Matplotlib/mpl_scenario2and4.py`
 4. `./gym_pybullet_drones/gym_pybullet_drones/control/RRTMPC.py`
 5. `./gym_pybullet_drones/gym_pybullet_drones/examples/Pybullet_Simulation.py`
 6. `./gym_pybullet_drones/gym_pybullet_drones/envs/custom_env.py`
@@ -27,8 +27,8 @@ To be able to run the MPC and RRT simulations of the matplotlib-version, it is a
 
 ```bash
 python ./Matplotlib/mpl_scenario1.py
-python ./Matplotlib/mpl_scenario2.py
 python ./Matplotlib/mpl_scenario3.py
+python ./Matplotlib/mpl_scenario2and4.py
 ```
 
 4. When you are done with any simulation and you wish to remove the environment, run the following two commands:
@@ -46,8 +46,8 @@ conda remove -n mpc_drone_env --all
 
 ```batch
 python Matplotlib\mpl_scenario1.py
-python Matplotlib\mpl_scenario2.py
 python Matplotlib\mpl_scenario3.py
+python Matplotlib\mpl_scenario2and4.py
 ```
 
 4. Within the python scripts, the simulation can be configured such as enabling or disabling RRT or the moving target. These configurations are done by switching booleans at the top of the scripts.
