@@ -9,7 +9,7 @@ import time
 # =============================
 # CONFIG
 # =============================
-use_rrt = True          # True = use RRT path, False = direct goal
+use_rrt = True        # True = use RRT path, False = direct goal
 use_moving_goal = False   # True = sinus-like moving goal (turn rrt off), False = static goal
 
 rrt_step = 2 #smaller gives more detailed path, but more expensive (may need to increase max iter in rrt)
@@ -272,6 +272,8 @@ waypoint_idx = 0
 goal_pos = x_goal_static.copy()
 t_sim = 0.0
 
+control_effort = 0.0
+
 def draw():
     ax.clear()
     draw_plane(ax,bounds[2,0],'saddlebrown',0.4)
@@ -338,6 +340,11 @@ if record_video:
                 print(f"Goal reached at step {goal_reached_step}!")
                 print(f"Goal was reached in {goal_reached_time} seconds")
 
+                traj = np.array(trajectory)
+                path_length = np.sum(np.linalg.norm(traj[1:] - traj[:-1], axis=1))
+                print(f"Path length: {path_length:.3f} m")
+                print(f"Total control effort: {control_effort:.3f}")
+
             # Determine current waypoint
             if use_rrt:
                 if waypoint_idx < len(rrt_path)-1 and np.linalg.norm(x_state[:3]-rrt_path[waypoint_idx])<0.3:
@@ -353,6 +360,8 @@ if record_video:
 
             sol = opti.solve()
             u0 = sol.value(U[:,0])
+
+            control_effort += np.dot(u0, u0)
 
             # Integrate dynamics
             x_state = np.array([
@@ -402,6 +411,11 @@ else:
             print(f"Goal reached at step {goal_reached_step}!")
             print(f"Goal was reached in {goal_reached_time} seconds")
 
+            traj = np.array(trajectory)
+            path_length = np.sum(np.linalg.norm(traj[1:] - traj[:-1], axis=1))
+            print(f"Path length: {path_length:.3f} m")
+            print(f"Total control effort: {control_effort:.3f}")
+
         # Determine current waypoint
         if use_rrt:
             if waypoint_idx < len(rrt_path)-1 and np.linalg.norm(x_state[:3]-rrt_path[waypoint_idx])<0.3:
@@ -417,6 +431,8 @@ else:
 
         sol = opti.solve()
         u0 = sol.value(U[:,0])
+
+        control_effort += np.dot(u0, u0)
 
         # Integrate dynamics
         x_state = np.array([

@@ -225,6 +225,8 @@ x_state = np.array([*x_start, 0, 0, 0])
 trajectory = [x_state[:3]]
 waypoint_idx = 0
 
+control_effort = 0.0
+
 def draw():
     ax.clear()
     draw_plane(ax, z_ground, color='saddlebrown', alpha=0.4)
@@ -283,6 +285,12 @@ if record_video:
                 print(f"Goal reached at step {goal_reached_step}!")
                 print(f"Goal was reached in {goal_reached_time} seconds")
 
+                traj = np.array(trajectory)
+                path_length = np.sum(np.linalg.norm(traj[1:] - traj[:-1], axis=1))
+
+                print(f"Path length: {path_length:.3f} m")
+                print(f"Total control effort: {control_effort:.3f}")
+
             if use_rrt:
                 if waypoint_idx < len(rrt_path) - 1:
                     if np.linalg.norm(x_state[:3] - rrt_path[waypoint_idx]) < 0.3:
@@ -298,6 +306,8 @@ if record_video:
             opti.set_initial(U, np.zeros((nu, N)))
             sol = opti.solve()
             u0 = sol.value(U[:,0])
+
+            control_effort += np.dot(u0, u0)
 
             # update state
             x_state = np.array([
@@ -340,6 +350,12 @@ else:
             print(f"Goal reached at step {goal_reached_step}!")
             print(f"Goal was reached in {goal_reached_time} seconds")
 
+            traj = np.array(trajectory)
+            path_length = np.sum(np.linalg.norm(traj[1:] - traj[:-1], axis=1))
+
+            print(f"Path length: {path_length:.3f} m")
+            print(f"Total control effort: {control_effort:.3f}")
+
         if use_rrt:
             if waypoint_idx < len(rrt_path) - 1:
                 if np.linalg.norm(x_state[:3] - rrt_path[waypoint_idx]) < 0.3:
@@ -355,6 +371,8 @@ else:
         opti.set_initial(U, np.zeros((nu, N)))
         sol = opti.solve()
         u0 = sol.value(U[:,0])
+
+        control_effort += np.dot(u0, u0)
 
         # update state
         x_state = np.array([
