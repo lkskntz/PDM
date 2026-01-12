@@ -6,11 +6,11 @@ Planning and Decision Making project
 
 There are a number of files in this repository that have been created from scratch for this project by us. To clarify what code is authentic from us, those files are listed below:
 
-1. `./Matplotlib/MPC_mpl_fix.py`
-2. `./Matplotlib/MPC_mpl_mvt.py`
-3. `./Matplotlib/MPC_mpl_crossbeams.py`
+1. `./Matplotlib/mpl_scenario1.py`
+2. `./Matplotlib/mpl_scenario2.py`
+3. `./Matplotlib/mpl_scenario3.py`
 4. `./gym_pybullet_drones/gym_pybullet_drones/control/RRTMPC.py`
-5. `./gym_pybullet_drones/gym_pybullet_drones/examples/MPC_Test.py`
+5. `./gym_pybullet_drones/gym_pybullet_drones/examples/Pybullet_Simulation.py`
 6. `./gym_pybullet_drones/gym_pybullet_drones/envs/custom_env.py`
 7. `./gym_pybullet_drones/gym_pybullet_drones/envs/obstacles.py`
 8. `./gym_pybullet_drones/gym_pybullet_drones/mpc_constraint_helper.py`
